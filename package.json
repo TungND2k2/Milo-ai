@@ -2,7 +2,7 @@
 	"name": "milo-ai",
 	"displayName": "Milo AI",
 	"description": "AI coding agent powered by local LLM (Gemma4) with full skill system, tool execution, and browser automation. AI coding agent powered by local LLM.",
-	"version": "1.0.3",
+	"version": "1.0.4",
 	"icon": "assets/icons/icon.png",
 	"workspaces": [
 		".",

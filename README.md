@@ -20,7 +20,7 @@
 </table>
 </div>
 
-Meet **Milo AI** -- an AI coding assistant that runs as a VS Code extension, powered by LLMs. It can edit files, run terminal commands, use a browser, and extend itself via MCP tools -- all with human-in-the-loop approval.
+Meet **Milo AI** -- an AI coding assistant that runs as a VS Code extension, powered by LLMs. It can edit files, run terminal commands, use a browser, and extend itself via MCP tools -- all with human-in-the-loop approval for every action.
 
 ---
 
@@ -92,9 +92,9 @@ graph TB
 
 ---
 
-## Message Flow -- Khi user gui 1 message
+## Message Flow -- When a User Sends a Message
 
-Luong chi tiet khi user nhap message trong chat va gui di:
+Detailed flow when a user types a message in the chat and sends it:
 
 ```mermaid
 sequenceDiagram
@@ -109,23 +109,23 @@ sequenceDiagram
     participant TE as ToolExecutor
     participant FS as File System /<br/>Terminal / Browser
 
-    User->>WV: Nhap message & nhan Send
+    User->>WV: Type message & press Send
     WV->>PB: ChatServiceClient.postUserMessage()
-    PB->>PB: Tao requestId (UUID)
+    PB->>PB: Generate requestId (UUID)
     PB->>GH: window.postMessage({type: "grpc_request", ...})
 
     GH->>GH: Lookup handler: serviceHandlers[service][method]
-    GH->>CTRL: Route den handler tuong ung
-    CTRL->>TASK: Gui message vao Task
+    GH->>CTRL: Route to matching handler
+    CTRL->>TASK: Forward message to Task
 
     Note over TASK: Task.handleWebviewAskResponse()
 
-    TASK->>TASK: parseMentions() - xu ly @file, @url, @folder
-    TASK->>TASK: parseSlashCommands() - xu ly /compact, /newtask, ...
+    TASK->>TASK: parseMentions() - resolve @file, @url, @folder
+    TASK->>TASK: parseSlashCommands() - resolve /compact, /newtask, ...
     TASK->>TASK: Load context: rules, skills, file details
 
     TASK->>SP: getSystemPrompt(promptContext)
-    SP->>SP: Chon variant theo model family<br/>(generic / next-gen / xs / ...)
+    SP->>SP: Select variant by model family<br/>(generic / next-gen / xs / ...)
     SP-->>TASK: System prompt + tools
 
     loop Task Loop (recursivelyMakeClineRequests)
@@ -134,58 +134,58 @@ sequenceDiagram
 
         TASK->>TASK: Parse assistant response<br/>(text + tool_use blocks)
 
-        alt Co tool calls
+        alt Has tool calls
             TASK->>TE: executeTool(toolName, params)
-            TE->>FS: Thuc thi (read/write file,<br/>run command, browser action, ...)
-            FS-->>TE: Ket qua
+            TE->>FS: Execute (read/write file,<br/>run command, browser action, ...)
+            FS-->>TE: Result
             TE-->>TASK: Tool result
-            TASK->>TASK: Append tool result vao conversation
-            Note over TASK: Tiep tuc loop -> goi API lai
-        else Khong co tool calls
-            TASK->>TASK: Kiem tra completion
-            Note over TASK: Hoi model xem da xong chua
+            TASK->>TASK: Append tool result to conversation
+            Note over TASK: Continue loop -> call API again
+        else No tool calls
+            TASK->>TASK: Check completion
+            Note over TASK: Ask model if task is done
         end
 
-        TASK->>WV: say() -> gui message ve webview<br/>(text, tool feedback, cost, ...)
+        TASK->>WV: say() -> send message to webview<br/>(text, tool feedback, cost, ...)
     end
 
-    TASK->>WV: Task hoan thanh / cho user input tiep
-    WV->>User: Hien thi ket qua
+    TASK->>WV: Task complete / waiting for user input
+    WV->>User: Display result
 ```
 
 ---
 
 ## Skill / Slash Command Flow
 
-Luong chay khi user dung skill (vd: `/compact`, `/newtask`) hoac custom skill tu `SKILL.md`:
+Flow when a user invokes a skill (e.g., `/compact`, `/newtask`) or a custom skill from `SKILL.md`:
 
 ```mermaid
 flowchart TD
-    A["User nhap message co chua<br/>/command hoac skill"] --> B{parseSlashCommands}
+    A["User types message containing<br/>/command or skill"] --> B{parseSlashCommands}
 
-    B --> C{"Loai command?"}
+    B --> C{"Command type?"}
 
-    C -->|"Built-in<br/>(/compact, /newtask,<br/>/newrule, /reportbug, ...)"| D["Map sang handler tuong ung<br/>(condenseToolResponse,<br/>newTaskToolResponse, ...)"]
-    D --> E["Tao tool response instructions"]
+    C -->|"Built-in<br/>(/compact, /newtask,<br/>/newrule, /reportbug, ...)"| D["Map to corresponding handler<br/>(condenseToolResponse,<br/>newTaskToolResponse, ...)"]
+    D --> E["Generate tool response instructions"]
     E --> J
 
-    C -->|"MCP Prompt<br/>(/mcp:server:prompt)"| F["Goi mcpPromptFetcher()<br/>lay prompt tu MCP server"]
-    F --> G["Insert prompt content<br/>vao message"]
+    C -->|"MCP Prompt<br/>(/mcp:server:prompt)"| F["Call mcpPromptFetcher()<br/>fetch prompt from MCP server"]
+    F --> G["Insert prompt content<br/>into message"]
     G --> J
 
-    C -->|"Custom Skill<br/>(/skill-name)"| H{"Tim SKILL.md trong<br/>~/.milo/skills/ hoac<br/>.milo/skills/"}
-    H -->|"Tim thay"| I["Doc SKILL.md<br/>(frontmatter + instructions)"]
-    I --> J["Append instructions<br/>vao user message"]
-    H -->|"Khong tim thay"| K["Bo qua,<br/>giu nguyen message"]
+    C -->|"Custom Skill<br/>(/skill-name)"| H{"Find SKILL.md in<br/>~/.milo/skills/ or<br/>.milo/skills/"}
+    H -->|"Found"| I["Read SKILL.md<br/>(frontmatter + instructions)"]
+    I --> J["Append instructions<br/>to user message"]
+    H -->|"Not found"| K["Skip,<br/>keep message as-is"]
     K --> J
 
-    J --> L["Message da duoc xu ly<br/>-> Tiep tuc vao Task Loop"]
+    J --> L["Message processed<br/>-> Continue to Task Loop"]
 
     style A fill:#e1f5fe
     style L fill:#e8f5e9
 ```
 
-### Chi tiet Skill Discovery
+### Skill Discovery Details
 
 ```mermaid
 flowchart LR
@@ -195,15 +195,15 @@ flowchart LR
     end
 
     subgraph "Discovery Process"
-        SCAN["Scan directories<br/>tim SKILL.md files"]
+        SCAN["Scan directories<br/>for SKILL.md files"]
         PARSE["Parse YAML frontmatter<br/>(name, description)"]
         TOGGLE["Check toggle state<br/>(globalSkillsToggles /<br/>localSkillsToggles)"]
-        FILTER["Filter: chi lay<br/>skills duoc enabled"]
+        FILTER["Filter: only keep<br/>enabled skills"]
     end
 
     subgraph "Integration"
-        SYS["Them vao SystemPromptContext<br/>-> Model biet cac skills"]
-        SLASH_CMD["Dang ky lam<br/>slash command"]
+        SYS["Add to SystemPromptContext<br/>-> Model knows available skills"]
+        SLASH_CMD["Register as<br/>slash command"]
     end
 
     G --> SCAN
@@ -219,7 +219,7 @@ flowchart LR
 
 ## gRPC Communication Layer
 
-Webview va Extension giao tiep qua protocol giong gRPC, chay tren `postMessage`:
+The Webview and Extension communicate via a gRPC-like protocol over `postMessage`:
 
 ```mermaid
 sequenceDiagram
@@ -241,25 +241,11 @@ sequenceDiagram
     EXT-->>WV: {grpc_response: {cancelled: true,<br/>request_id}}
 ```
 
-### Proto Services
-
-| Service | File | Chuc nang |
-|---------|------|-----------|
-| `ChatService` | `proto/cline/task.proto` | Gui/nhan message, tao task |
-| `StateService` | `proto/cline/state.proto` | Doc/ghi extension state, settings |
-| `FileService` | `proto/cline/file.proto` | Thao tac file |
-| `BrowserService` | `proto/cline/browser.proto` | Dieu khien browser |
-| `AccountService` | `proto/cline/account.proto` | Auth, tai khoan |
-| `McpService` | `proto/cline/mcp.proto` | Quan ly MCP servers |
-| `CommandsService` | `proto/cline/commands.proto` | VS Code commands |
-
----
-
 ## Task Lifecycle
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Created: User gui message / New Task
+    [*] --> Created: User sends message / New Task
     Created --> Initializing: Controller.initTask()
     Initializing --> Running: Task.startTask()
 
@@ -268,17 +254,17 @@ stateDiagram-v2
         LoadContext --> BuildPrompt: parseMentions, parseSlashCommands
         BuildPrompt --> APICall: attemptApiRequest()
         APICall --> StreamProcess: Stream response chunks
-        StreamProcess --> ToolExec: Co tool_use blocks
-        ToolExec --> APICall: Append result, loop lai
-        StreamProcess --> WaitUser: Can user input (ask)
-        WaitUser --> LoadContext: User tra loi
-        StreamProcess --> Complete: Khong con tool, task xong
+        StreamProcess --> ToolExec: Has tool_use blocks
+        ToolExec --> APICall: Append result, loop back
+        StreamProcess --> WaitUser: Needs user input (ask)
+        WaitUser --> LoadContext: User responds
+        StreamProcess --> Complete: No more tools, task done
     }
 
-    Running --> Cancelled: User cancel
+    Running --> Cancelled: User cancels
     Running --> Error: API error / abort
     Complete --> [*]
-    Cancelled --> Resuming: User resume
+    Cancelled --> Resuming: User resumes
     Resuming --> Running: resumeTaskFromHistory()
     Error --> [*]
 ```
