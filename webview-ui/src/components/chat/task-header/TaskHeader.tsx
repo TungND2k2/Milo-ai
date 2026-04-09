@@ -2,7 +2,6 @@ import { ClineMessage } from "@shared/ExtensionMessage"
 import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
 import React, { useCallback, useLayoutEffect, useMemo, useState } from "react"
 import Thumbnails from "@/components/common/Thumbnails"
-import { getModeSpecificFields, normalizeApiConfiguration } from "@/components/settings/utils/providerUtils"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import { cn } from "@/lib/utils"
 import { getEnvironmentColor } from "@/utils/environmentColors"
@@ -11,7 +10,6 @@ import DeleteTaskButton from "./buttons/DeleteTaskButton"
 import NewTaskButton from "./buttons/NewTaskButton"
 import OpenDiskConversationHistoryButton from "./buttons/OpenDiskConversationHistoryButton"
 import { CheckpointError } from "./CheckpointError"
-import ContextWindow from "./ContextWindow"
 import { FocusChain } from "./FocusChain"
 import { highlightText } from "./Highlights"
 
@@ -47,12 +45,10 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 	onSendMessage,
 }) => {
 	const {
-		apiConfiguration,
 		currentTaskItem,
 		checkpointManagerErrorMessage,
 		focusChainSettings,
 		navigateToSettings,
-		mode,
 		expandTaskHeader: isTaskExpanded,
 		setExpandTaskHeader: setIsTaskExpanded,
 		environment,
@@ -88,10 +84,6 @@ const TaskHeader: React.FC<TaskHeaderProps> = ({
 		document.addEventListener("mousedown", handleClickOutside)
 		return () => document.removeEventListener("mousedown", handleClickOutside)
 	}, [isHighlightedTextExpanded])
-
-	// Simplified computed values
-	const { selectedModelInfo } = normalizeApiConfiguration(apiConfiguration, mode)
-	const modeFields = getModeSpecificFields(apiConfiguration, mode)
 
 	// Event handlers
 	const toggleTaskExpanded = useCallback(() => setIsTaskExpanded(!isTaskExpanded), [setIsTaskExpanded, isTaskExpanded])
