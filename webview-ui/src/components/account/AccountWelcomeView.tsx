@@ -1,4 +1,4 @@
-import { VSCodeButton, VSCodeLink } from "@vscode/webview-ui-toolkit/react"
+import { VSCodeButton } from "@vscode/webview-ui-toolkit/react"
 import { useClineSignIn } from "@/context/ClineAuthContext"
 import { useExtensionState } from "@/context/ExtensionStateContext"
 import ClineLogoVariable from "../../assets/ClineLogoVariable"
@@ -20,7 +20,7 @@ export const AccountWelcomeView = () => {
 			</p>
 
 			<VSCodeButton className="w-full mb-4" disabled={isLoginLoading} onClick={handleSignIn}>
-				Sign up with Cline
+				Sign up with Milo AI
 				{isLoginLoading && (
 					<span className="ml-1 animate-spin">
 						<span className="codicon codicon-refresh" />
@@ -29,8 +29,7 @@ export const AccountWelcomeView = () => {
 			</VSCodeButton>
 
 			<p className="text-(--vscode-descriptionForeground) text-xs text-center m-0">
-				By continuing, you agree to the <VSCodeLink href="https://cline.bot/tos">Terms of Service</VSCodeLink> and{" "}
-				<VSCodeLink href="https://cline.bot/privacy">Privacy Policy.</VSCodeLink>
+				By continuing, you agree to the Terms of Service and Privacy Policy.
 			</p>
 		</div>
 	)

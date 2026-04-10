@@ -229,7 +229,7 @@ export const ClineAccountView = ({ clineUser, userOrganizations, activeOrganizat
 		fetchCreditBalance(dropdownValue)
 	}, 60000)
 
-	const clineUrl = appBaseUrl || "https://app.cline.bot"
+	const clineUrl = appBaseUrl || "https://x-or.cloud"
 
 	// Fetch balance on mount
 	useEffect(() => {

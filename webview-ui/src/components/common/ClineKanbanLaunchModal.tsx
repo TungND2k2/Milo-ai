@@ -7,7 +7,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { PLATFORM_CONFIG, PlatformType } from "@/config/platform.config"
 import { FileServiceClient, StateServiceClient } from "@/services/grpc-client"
 
-const INSTALL_COMMAND = "npm install -g cline"
+const INSTALL_COMMAND = ""
 const COPIED_TIMEOUT = 1500
 const resolveAssetSrc = (src: string) => (src.startsWith("/src/") ? new URL(src, import.meta.url).toString() : src)
 const kanbanDemoMp4Src = resolveAssetSrc(kanbanDemoVideoMp4)
@@ -68,7 +68,7 @@ export const ClineKanbanLaunchModal: React.FC<ClineKanbanLaunchModalProps> = ({ 
 							className="m-0 text-lg font-semibold"
 							id="cline-kanban-title"
 							style={{ color: "var(--vscode-editor-foreground)" }}>
-							Introducing Cline Kanban
+							Introducing Milo AI Kanban
 						</h2>
 					</div>
 
