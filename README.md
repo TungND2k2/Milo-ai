@@ -8,6 +8,36 @@
 
 ---
 
+## Installation
+
+### Prerequisites
+
+- [VS Code](https://code.visualstudio.com/) version 1.84 or higher
+- An LLM API endpoint (OpenAI Compatible, Anthropic, etc.)
+
+### Install from VSIX
+
+1. Download the latest `.vsix` file from the 
+2. Open VS Code
+3. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac) → type **"Install from VSIX"**
+4. Select the downloaded `milo-ai-x.x.x.vsix` file
+5. Reload VS Code when prompted
+
+**Or install via terminal:**
+
+### First-time Setup
+
+After installation, Milo AI will open a welcome screen:
+
+1. Enter your **API Base URL** (e.g. `https://api.inferx.x-or.cloud/v1`)
+2. Enter your **API Key**
+3. Click **Get Started**
+
+> Default model is `gemma4`. You can change the provider, model, and other settings later in Settings (gear icon).
+
+
+---
+
 ## Flow 1: Overall Architecture
 
 How the Client (VS Code UI), Extension (brain), and LLM (AI model) work together:
