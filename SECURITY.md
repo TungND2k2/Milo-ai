@@ -1,233 +1,237 @@
-# Milo AI
+# Milo AI API Server
 
-<p align="center">
-  <img src="assets/icons/icon.png" width="128" />
-</p>
-
-**Milo AI** -- an AI coding assistant that runs as a VS Code extension, powered by LLMs. It can edit files, run terminal commands, use a browser, and extend itself via MCP tools.
+Standalone API server exposing all Milo AI agent capabilities (tools, skills, agent loop) via REST API.
 
 ---
 
-## Installation
+## Architecture
 
-### Prerequisites
+```mermaid
+flowchart TB
+    subgraph CLIENTS["🌐 Clients"]
+        WEB["Web App"]
+        MOBILE["Mobile App"]
+        CLI["CLI / Script"]
+        EXT["VS Code Extension"]
+    end
 
-- [VS Code](https://code.visualstudio.com/) version 1.84 or higher
-- An LLM API endpoint (OpenAI Compatible, Anthropic, etc.)
+    subgraph API_SERVER["🖥️ Milo AI API Server (Express)"]
+        
+        subgraph ROUTES["REST Endpoints"]
+            RUN["POST /v1/agent/run<br/>(blocking, return full result)"]
+            STREAM["POST /v1/agent/stream<br/>(SSE streaming events)"]
+            SKILLS_EP["GET /v1/skills<br/>(list available skills)"]
+            TOOLS_EP["GET /v1/tools<br/>(list available tools)"]
+        end
 
-### Install from VSIX
+        subgraph SESSION["Session Manager"]
+            SM["Create / track / abort sessions"]
+            RUNNER["Task Runner<br/>(wraps Cline Task engine)"]
+        end
 
-1. Download the latest `.vsix` file from the 
-2. Open VS Code
-3. Press `Ctrl+Shift+P` (or `Cmd+Shift+P` on Mac) → type **"Install from VSIX"**
-4. Select the downloaded `milo-ai-x.x.x.vsix` file
-5. Reload VS Code when prompted
+        subgraph CORE["Core Engine (from Cline)"]
+            AGENT_LOOP["Agent Loop<br/>LLM → Tool → Repeat"]
+            PROMPT["Prompt Builder<br/>(system prompt + rules)"]
+            
+            subgraph TOOLS["Built-in Tools"]
+                T_FILE["read_file / write_file"]
+                T_CMD["execute_command"]
+                T_BROWSER["browser_action"]
+                T_MCP["MCP tools"]
+                T_SEARCH["search / grep"]
+            end
 
-**Or install via terminal:**
+            subgraph SKILL_SYS["Skill System"]
+                SKILL_LOAD["Load SKILL.md files"]
+                SLASH["Slash commands"]
+            end
+        end
 
-### First-time Setup
+        subgraph ADAPTERS["Adapters (replace VS Code)"]
+            HOST["Headless HostProvider<br/>(no VS Code needed)"]
+            SSE["SSE Event Bridge<br/>(say/ask → HTTP events)"]
+            TERM["Standalone Terminal<br/>(child_process)"]
+            FILE_EDIT["Headless File Editor<br/>(direct fs operations)"]
+        end
+    end
 
-After installation, Milo AI will open a welcome screen:
+    subgraph LLM["🤖 LLM Backend"]
+        OPENAI["OpenAI Compatible<br/>(Gemma4 / LiteLLM)"]
+        ANTHROPIC["Anthropic<br/>(Claude)"]
+        OTHER["Other providers<br/>(40+ supported)"]
+    end
 
-1. Enter your **API Base URL** (e.g. `https://api.inferx.x-or.cloud/v1`)
-2. Enter your **API Key**
-3. Click **Get Started**
+    CLIENTS -- "HTTP request" --> ROUTES
+    ROUTES --> SESSION
+    SESSION --> CORE
+    CORE --> ADAPTERS
+    AGENT_LOOP --> LLM
+    LLM -- "streaming response" --> AGENT_LOOP
+    AGENT_LOOP --> TOOLS
+    TOOLS --> TERM
+    TOOLS --> FILE_EDIT
 
-> Default model is `gemma4`. You can change the provider, model, and other settings later in Settings (gear icon).
-
+    SSE -- "SSE events" --> CLIENTS
+```
 
 ---
 
-## Flow 1: Overall Architecture
-
-How the Client (VS Code UI), Extension (brain), and LLM (AI model) work together:
+## What comes from Cline vs What's new
 
 ```mermaid
 flowchart LR
-    subgraph CLIENT["🖥️ Client (VS Code Webview)"]
-        UI["Chat UI"]
-        SETTINGS["Settings"]
+    subgraph FROM_CLINE["✅ From Cline (reuse as-is)"]
+        C1["Agent Loop<br/>(Task engine)"]
+        C2["All 15+ Tools<br/>(file, terminal, browser...)"]
+        C3["Skill System<br/>(SKILL.md)"]
+        C4["Prompt Builder<br/>(model variants)"]
+        C5["40+ LLM Providers"]
+        C6["Slash Commands"]
+        C7["MCP Support"]
+        C8["Context Manager"]
     end
 
-    subgraph EXTENSION["⚙️ Extension (Backend)"]
-        CTRL["Controller"]
-        
-        subgraph SESSION["Session Manager"]
-            TASK["Task Engine"]
-            HISTORY["Conversation History"]
-            CHECKPOINT["Checkpoint<br/>(auto-save snapshots)"]
-        end
-
-        subgraph SKILLS["Skills & Tools"]
-            SLASH["Slash Commands<br/>/compact /newtask ..."]
-            CUSTOM_SKILL["Custom Skills<br/>SKILL.md files"]
-            MCP_TOOL["MCP Tools<br/>(extensible)"]
-            BUILTIN["Built-in Tools<br/>read file, write file,<br/>run command, browser ..."]
-        end
-
-        RULES["Rules & Context<br/>.milorules, @mentions"]
-        PROMPT["Prompt Builder<br/>(system prompt + tools)"]
+    subgraph NEW_CODE["🆕 New Code"]
+        N1["HTTP Server<br/>(Express routes)"]
+        N2["Session Manager<br/>(multi-user)"]
+        N3["SSE Event Bridge<br/>(stream to HTTP)"]
+        N4["Headless Adapters<br/>(replace VS Code APIs)"]
+        N5["Config from env vars<br/>(not VS Code settings)"]
     end
 
-    subgraph LLM["🤖 LLM (AI Model)"]
-        API["API Provider<br/>OpenAI Compatible /<br/>Anthropic / etc."]
+    subgraph REMOVED["❌ Removed (VS Code only)"]
+        R1["Webview UI"]
+        R2["gRPC over postMessage"]
+        R3["VS Code commands"]
+        R4["Sidebar / panels"]
     end
 
-    UI -- "user message" --> CTRL
-    CTRL -- "response / tool results" --> UI
-    SETTINGS -- "config (provider, model, API key)" --> CTRL
-
-    CTRL --> TASK
-    TASK --> HISTORY
-    TASK --> CHECKPOINT
-    TASK --> RULES
-    TASK --> SKILLS
-    RULES --> PROMPT
-    SKILLS --> PROMPT
-
-    PROMPT -- "system prompt + conversation + tools" --> API
-    API -- "streaming response (text / tool calls / thinking)" --> TASK
-
-    TASK -- "execute" --> BUILTIN
-    BUILTIN -- "result" --> TASK
-```
-
-**How it works:**
-
-1. **User sends a message** in the Chat UI
-2. **Controller** creates or resumes a **Session** (Task)
-3. Session loads **Rules** (from .milorules files) and available **Skills**
-4. **Prompt Builder** assembles everything into a system prompt
-5. Sends to **LLM** via API (streaming)
-6. LLM responds with **text**, **tool calls**, or **thinking**
-7. If LLM requests a tool → Extension **executes it** → sends result back to LLM
-8. Loop continues until LLM says "done"
-9. Final response shown to user
-
----
-
-## Flow 2: Message Processing & Execution
-
-What happens step-by-step when you send a message:
-
-```mermaid
-flowchart TD
-    START(["💬 User sends message"]) --> PARSE
-
-    subgraph PARSE_PHASE["1️⃣ Parse & Prepare"]
-        PARSE["Parse message"]
-        PARSE --> MENTIONS{"Has @mentions?"}
-        MENTIONS -->|"@file, @url"| LOAD_FILES["Load file contents / fetch URLs"]
-        MENTIONS -->|"No"| SLASH_CHECK
-
-        LOAD_FILES --> SLASH_CHECK{"Has /commands?"}
-        SLASH_CHECK -->|"/compact, /newtask ..."| RUN_SLASH["Execute slash command"]
-        SLASH_CHECK -->|"/skill-name"| LOAD_SKILL["Load SKILL.md instructions"]
-        SLASH_CHECK -->|"No"| BUILD
-        RUN_SLASH --> BUILD
-        LOAD_SKILL --> BUILD
-
-        BUILD["Build system prompt<br/>+ attach rules & tools"]
-    end
-
-    BUILD --> SEND
-
-    subgraph LLM_PHASE["2️⃣ LLM Thinking & Response"]
-        SEND["Send to LLM API<br/>(streaming)"]
-        SEND --> STREAM["Receive stream chunks"]
-
-        STREAM --> CHUNK_TYPE{"What did LLM return?"}
-
-        CHUNK_TYPE -->|"💭 Thinking"| SHOW_THINK["Show thinking block<br/>(collapsible in UI)"]
-        CHUNK_TYPE -->|"💬 Text"| SHOW_TEXT["Show text response<br/>(streaming, real-time)"]
-        CHUNK_TYPE -->|"🔧 Tool Call"| TOOL_CALL["Tool call detected"]
-
-        SHOW_THINK --> STREAM
-        SHOW_TEXT --> STREAM
-    end
-
-    TOOL_CALL --> APPROVE
-
-    subgraph TOOL_PHASE["3️⃣ Tool Execution"]
-        APPROVE{"Auto-approve<br/>enabled?"}
-        APPROVE -->|"Yes"| EXECUTE
-        APPROVE -->|"No"| ASK_USER["Ask user permission"]
-        ASK_USER -->|"Approved ✓"| EXECUTE
-        ASK_USER -->|"Rejected ✗"| SKIP["Skip tool,<br/>tell LLM it was rejected"]
-
-        EXECUTE["Execute tool"]
-
-        EXECUTE --> TOOL_TYPE{"Which tool?"}
-        TOOL_TYPE -->|"📄 read_file"| T1["Read file content"]
-        TOOL_TYPE -->|"✏️ write_file"| T2["Create/edit file<br/>(show diff)"]
-        TOOL_TYPE -->|"▶️ execute_command"| T3["Run terminal command"]
-        TOOL_TYPE -->|"🌐 browser_action"| T4["Browser automation<br/>(click, type, screenshot)"]
-        TOOL_TYPE -->|"🔌 MCP tool"| T5["Call MCP server"]
-        TOOL_TYPE -->|"✅ attempt_completion"| DONE
-
-        T1 --> RESULT["Send result back to LLM"]
-        T2 --> RESULT
-        T3 --> RESULT
-        T4 --> RESULT
-        T5 --> RESULT
-        SKIP --> RESULT
-    end
-
-    RESULT --> SEND
-
-    DONE(["✅ Task complete!<br/>Show final result to user"])
-
-    subgraph ERROR_PHASE["⚠️ Error Handling"]
-        ERR_API["API error / timeout"]
-        ERR_API --> RETRY["Auto-retry<br/>(2s → 4s → 8s backoff)"]
-        RETRY -->|"Success"| STREAM
-        RETRY -->|"All retries failed"| ASK_RETRY["Ask user: Retry or Cancel?"]
-    end
-
-    STREAM -.->|"Error"| ERR_API
-
-    style START fill:#e3f2fd
-    style DONE fill:#e8f5e9
-    style SHOW_THINK fill:#f3e5f5
-    style SHOW_TEXT fill:#e8f5e9
-    style TOOL_CALL fill:#fff3e0
-```
-
-**The loop explained simply:**
-
-1. **Parse** — resolve @mentions and /commands in the message
-2. **Send to LLM** — stream the response in real-time
-3. **LLM responds** with one of:
-   - **Thinking** → shown as collapsible block (reasoning process)
-   - **Text** → shown directly (streaming, word by word)
-   - **Tool call** → extension executes the tool, sends result back to LLM
-4. **Repeat** — LLM keeps calling tools until the task is done
-5. **Done** — LLM calls `attempt_completion` to finish
-
----
-
-## Key Directories
-
-```
-src/
-  core/
-    controller/        # Receives messages, manages sessions
-    task/              # Task engine (main loop, tool execution)
-    prompts/           # System prompt builder (per model variant)
-    api/               # API provider handlers
-    context/           # Rules, file tracking, mentions
-    hooks/             # Lifecycle hooks (TaskStart, Cancel)
-    slash-commands/     # Built-in slash command handlers
-  shared/
-    api.ts             # Provider & model definitions
-    net.ts             # Proxy-aware networking
-proto/                 # gRPC protocol definitions
-webview-ui/            # React frontend (Chat UI, Settings)
-cli/                   # Terminal UI (React Ink)
+    style FROM_CLINE fill:#e8f5e9
+    style NEW_CODE fill:#e3f2fd
+    style REMOVED fill:#ffebee
 ```
 
 ---
 
-## License
+## API Usage
 
-[Apache 2.0 © 2026 Milo AI Bot Inc.](./LICENSE)
+### Run a task (blocking)
+
+```bash
+curl -X POST http://localhost:3000/v1/agent/run \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task": "Create a hello world Express server in /tmp/demo",
+    "apiKey": "sk-xxx",
+    "modelId": "gemma4"
+  }'
+```
+
+Response:
+```json
+{
+  "sessionId": "abc-123",
+  "status": "completed",
+  "result": "Created Express server with index.js and package.json",
+  "events": [...],
+  "usage": { "inputTokens": 1200, "outputTokens": 800, "turns": 3 }
+}
+```
+
+### Run a task (streaming)
+
+```bash
+curl -X POST http://localhost:3000/v1/agent/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "task": "Fix the bug in src/utils.ts"
+  }'
+```
+
+Response (SSE):
+```
+event: thinking
+data: {"text": "Let me read the file first..."}
+
+event: tool_call
+data: {"tool": "read_file", "params": {"path": "src/utils.ts"}}
+
+event: tool_result
+data: {"tool": "read_file", "result": "file contents..."}
+
+event: text
+data: {"text": "I found the bug. The issue is..."}
+
+event: tool_call
+data: {"tool": "write_file", "params": {"path": "src/utils.ts", "content": "..."}}
+
+event: completion
+data: {"result": "Fixed the null check bug in parseConfig()"}
+```
+
+### List skills
+
+```bash
+curl http://localhost:3000/v1/skills
+```
+
+### List tools
+
+```bash
+curl http://localhost:3000/v1/tools
+```
+
+---
+
+## Configuration
+
+All config via environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MILO_API_PORT` | `3000` | Server port |
+| `MILO_API_HOST` | `0.0.0.0` | Server host |
+| `MILO_WORKSPACE_DIR` | `cwd` | Default working directory |
+| `MILO_DATA_DIR` | `~/.milo/data` | Data storage directory |
+| `MILO_API_PROVIDER` | `openai` | Default LLM provider |
+| `MILO_API_BASE_URL` | `https://api.inferx.x-or.cloud/v1` | Default API base URL |
+| `MILO_API_KEY` | `` | Default API key |
+| `MILO_MODEL_ID` | `gemma4` | Default model |
+| `MILO_AUTO_APPROVE` | `true` | Auto-approve all tools |
+| `MILO_MAX_TURNS` | `50` | Max agent loop turns |
+
+---
+
+## Project Structure
+
+```
+milo-ai-api/
+  src/
+    index.ts                    # Entry point, start server
+    server.ts                   # Express app setup + routes
+    config.ts                   # Load config from env vars
+
+    routes/
+      agent.ts                  # POST /v1/agent/run & /stream
+      skills.ts                 # GET /v1/skills
+      tools.ts                  # GET /v1/tools
+
+    session/
+      session-manager.ts        # Track active sessions
+      task-runner.ts            # Wrap Cline Task engine
+
+    adapters/
+      host-provider-api.ts      # Headless HostProvider (no VS Code)
+      host-bridge-noop.ts       # No-op VS Code service stubs
+      sse-event-bridge.ts       # Bridge Task events → SSE stream
+
+    types/
+      api-types.ts              # Request/Response types
+
+  # Imports from ../milo-ai/src/ (shared codebase):
+  #   core/task/          → Agent loop
+  #   core/api/           → LLM providers
+  #   core/prompts/       → Prompt builder
+  #   core/context/       → Skills, rules
+  #   shared/             → Types, tools
+```
